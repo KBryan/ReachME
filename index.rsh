@@ -6,7 +6,7 @@ const CommonInterface = {
   showOutcome: Fun([Array(Address, NUM_OF_WINNERS)], Null),
 };
 
-const FunderInterface = {
+const GovernernanceInterface = {
   ...CommonInterface,
   getParams: Fun([], Object({
     deadline: UInt, // relative deadline
@@ -14,7 +14,7 @@ const FunderInterface = {
   })),
 };
 
-const BuyerInterface = {
+const VoterInterface = {
   ...CommonInterface,
   shouldBuyTicket: Fun([UInt], Bool),
   showPurchase: Fun([Address], Null),
@@ -23,17 +23,17 @@ const BuyerInterface = {
 export const main = Reach.App(
     { },
     [
-      ['Funder', FunderInterface], ['class', 'Buyer', BuyerInterface],
+      ['Governer', GovernernanceInterface], ['class', 'Voter', VoterInterface],
     ],
-    (Funder, Buyer) => {
+    (Governer, Voter) => {
       const showOutcome = (winners) =>
-          each([Funder, Buyer], () => interact.showOutcome(winners));
+          each([Governer, Voter], () => interact.showOutcome(winners));
 
-      Funder.only(() => {
+        Governer.only(() => {
         const { ticketPrice, deadline } = declassify(interact.getParams()); });
-      Funder.publish(ticketPrice, deadline);
+        Governer.publish(ticketPrice, deadline);
 
-      const initialWinners = Array.replicate(NUM_OF_WINNERS, Funder);
+      const initialWinners = Array.replicate(NUM_OF_WINNERS, Governer);
 
       // Until deadline, allow buyers to buy ticket
       const [ keepGoing, winners, ticketsSold ] =
@@ -41,22 +41,22 @@ export const main = Reach.App(
               .invariant(balance() == ticketsSold * ticketPrice)
               .while(keepGoing)
               .case(
-                  Buyer,
+                  Voter,
                   (() => ({
                     when: declassify(interact.shouldBuyTicket(ticketPrice)) })),
                   (() => ticketPrice),
                   () => {
                     const buyer = this;
-                    Buyer.only(() => interact.showPurchase(buyer));
+                      Voter.only(() => interact.showPurchase(buyer));
                     const idx = ticketsSold % NUM_OF_WINNERS;
                     const newWinners =
                         Array.set(winners, idx, buyer);
                     return [ true, newWinners, ticketsSold + 1 ]; })
               .timeout(deadline, () => {
-                race(Buyer, Funder).publish();
+                race(Voter, Governer).publish();
                 return [ false, winners, ticketsSold ]; });
 
-      transfer(balance() % NUM_OF_WINNERS).to(Funder);
+      transfer(balance() % NUM_OF_WINNERS).to(Governer);
       const reward = balance() / NUM_OF_WINNERS;
 
       winners.forEach(winner =>
